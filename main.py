@@ -1,82 +1,52 @@
-import pandas as pd
 import numpy as np
-from sklearn.ensemble import IsolationForest
+from data_processing import DataProcessor
+from features import FeatureExtractor
+from anomalies import AnomalyInjector, AnomalyDetector
 
-def augment_data(X, number_of_copies, noise_level):
-    """
-    Augments the data by creating copies with added Gaussian noise.
-    """
-    augmented = []
-    for df in X:
-        augmented.append(df)  # Keep original
-        for _ in range(number_of_copies):
-            noisy_df = df.copy()
-            numeric_cols = noisy_df.select_dtypes(include=[np.number]).columns
-            noise = np.random.normal(0, noise_level, size=noisy_df[numeric_cols].shape)
-            noisy_df[numeric_cols] = noisy_df[numeric_cols] + noise
-            augmented.append(noisy_df)
-    return augmented
+def run_experiment(config):
+    # 1. Pipeline Setup
+    processor = DataProcessor(config['file_path'], config['window_size'], config['step_size'])
+    injector = AnomalyInjector(config['anomaly_fraction'], config['intensity'])
+    detector = AnomalyDetector()
 
-def create_windows(df, window_size, step_size):
-    """
-    Slices the DataFrame into overlapping windows.
-    """
-    windows = []
-    for i in range(0, len(df) - window_size + 1, step_size):
-        windows.append(df.iloc[i : i + window_size])
-    return windows
+    # 2. Process & Feature Extraction
+    raw_data = processor.load_raw_data()
+    windows = processor.create_windows(raw_data)
+    features = FeatureExtractor.extract_from_windows(windows)
 
-def build_feature_matrix(windows):
-    """
-    Extracts statistical features (mean, std, min, max) from each window.
-    """
-    feature_matrix = []
-    for window in windows:
-        numeric_window = window.select_dtypes(include=[np.number])
-        features = []
-        for col in numeric_window.columns:
-            features.extend([
-                numeric_window[col].mean(),
-                numeric_window[col].std(),
-                numeric_window[col].min(),
-                numeric_window[col].max()
-            ])
-        feature_matrix.append(features)
-    return feature_matrix
+    # 3. Shuffle and Split
+    print("Shuffling and splitting data...")
+    indices = np.arange(len(features))
+    np.random.seed(config.get('seed', 42))
+    np.random.shuffle(indices)
+    
+    features_shuffled = features[indices]
+    split_idx = int(len(features_shuffled) * config['train_split'])
+    
+    X_train = features_shuffled[:split_idx]
+    X_test_clean = features_shuffled[split_idx:]
 
-def train_isolation_forest(feature_matrix):
-    """
-    Trains an Isolation Forest model on the feature matrix.
-    """
-    model = IsolationForest(contamination='auto', random_state=42)
-    model.fit(feature_matrix)
-    return model
+    # 4. Inject Anomalies into Test Set
+    X_test_corrupted, y_test = injector.inject(X_test_clean)
 
-# Parameters
-number_of_copies = 2
-noise = 0.01
-window_size = 100
-step_size = 50
+    # 5. Train and Evaluate
+    detector.train(X_train)
+    detector.evaluate(X_test_corrupted, y_test)
 
-# Load data (skipping ID and Unit rows)
-def load_data(file_path):
-    return [pd.read_csv(file_path, sep=';', decimal=',', skiprows=[0, 2])]
+    # 6. Save results
+    detector.results.to_csv("experiment_results.csv", index=False)
+    print("\nExperiment complete. Results saved to 'experiment_results.csv'.")
 
-X = load_data("input.txt")
+if __name__ == "__main__":
+    # Configuration Dictionary
+    config = {
+        'file_path': 'input.txt',
+        'window_size': 100,
+        'step_size': 50,
+        'train_split': 0.7,
+        'anomaly_fraction': 0.1,
+        'intensity': 10.0,
+        'seed': 42
+    }
 
-# 1. Augment
-augmented_cycles = augment_data(X, number_of_copies, noise)
-
-# 2. Flatten all cycles into one combined DataFrame
-all_data = pd.concat(augmented_cycles, ignore_index=True)
-
-# 3. Slide windows over combined data
-windows = create_windows(all_data, window_size, step_size)
-
-# 4. Extract features from every window
-feature_matrix = np.array(build_feature_matrix(windows))
-
-# 5. Train
-model = train_isolation_forest(feature_matrix)
-
-print(f"Trained on {len(feature_matrix)} windows.")
+    run_experiment(config)
