@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+.venv/
+venv/
+ENV/
+
+datasets/
+results/
+*.csv
+*.png
+*.txt
+
+# IDEs
+.idea/
+.vscode/
+
+# OS generated files
+.DS_Store
+Thumbs.db
