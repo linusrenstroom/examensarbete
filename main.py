@@ -6,7 +6,6 @@ if __name__ == "__main__":
         'file_name': 'sidstyrning-februari.txt',
         'window_size': 200,
         'step_size': 100,
-        'noise_level': 0.02,
         'outlier_fraction': 0.20,
         'noise_fraction': 0.20,
         'contamination': 0.2,
