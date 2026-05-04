@@ -5,15 +5,25 @@ from app.data.processor import DataProcessor
 from app.data.injector import AnomalyInjector
 from app.features.extractor import FeatureExtractor
 from app.models.detector import AnomalyDetector
-from app.visualization.plotters import AnomalyHeatmapPlotter, ScorePlotter
 
 class AnomalyExperiment:
-    """Orchestrates the anomaly detection experiment workflow with updated paths."""
+    """Orchestrates the anomaly detection experiment workflow focused on window and step size evaluation."""
     
     def __init__(self, config: dict):
         self.config = config
         self.data_dir = "datasets"
-        self.output_dir = "results"
+        
+        # Unique output directory for this experiment run
+        self.output_dir = os.path.join(
+            "results", 
+            f"win{config['window_size']}_step{config['step_size']}"
+        )
+        
+        # Locked Parameters for the study
+        self.contamination = 0.2
+        self.n_estimators = 300
+        self.seed = 42
+        self.outlier_fraction = 0.2 # Locked to match contamination
         
         # Ensure directories exist
         os.makedirs(self.output_dir, exist_ok=True)
@@ -26,12 +36,12 @@ class AnomalyExperiment:
             config['step_size']
         )
         self.injector = AnomalyInjector(
-            outlier_fraction=config['outlier_fraction'], 
-            noise_fraction=config['noise_fraction']
+            outlier_fraction=self.outlier_fraction
         )
         self.detector = AnomalyDetector(
-            contamination=config['contamination'], 
-            n_estimators=config['n_estimators']
+            contamination=self.contamination, 
+            n_estimators=self.n_estimators,
+            random_state=self.seed
         )
 
     def run(self):
@@ -39,7 +49,7 @@ class AnomalyExperiment:
         raw_data = self.processor.load_raw_data()
 
         # 2. Training Set Processing
-        print("\n--- Training Set Processing ---")
+        print(f"\n--- Training Set Processing (Window: {self.config['window_size']}, Step: {self.config['step_size']}) ---")
         train_raw = raw_data.copy()
         train_windows = self.processor.create_windows(train_raw)
         X_train = FeatureExtractor.extract_from_windows(train_windows)
@@ -71,23 +81,8 @@ class AnomalyExperiment:
         # 7. Save Results CSV
         results_path = os.path.join(self.output_dir, "experiment_results.csv")
         self.detector.results.to_csv(results_path, index=False)
-        
-        # 8. Visualization
-        self._visualize(results_path, test_data_path)
 
         print(f"\nExperiment complete. All outputs saved to '{self.output_dir}/'.")
-
-    def _visualize(self, results_path, test_data_path):
-        heatmap_plotter = AnomalyHeatmapPlotter(self.output_dir)
-        heatmap_plotter.plot(
-            results_path, 
-            test_data_path, 
-            self.config['window_size'], 
-            self.config['step_size']
-        )
-        
-        score_plotter = ScorePlotter(self.output_dir)
-        score_plotter.plot(results_path)
 
     def _label_windows(self, y_samples: np.ndarray) -> np.ndarray:
         y_test = []

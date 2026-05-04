@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import RobustScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, f1_score
 from typing import Dict
 
@@ -14,7 +14,7 @@ class AnomalyDetector:
             random_state=random_state,
             max_samples='auto'
         )
-        self.scaler = RobustScaler()
+        self.scaler = StandardScaler()
         self.results: pd.DataFrame = None
 
     def train(self, X_train: np.ndarray):

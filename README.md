@@ -1,32 +1,40 @@
 # Anomaly Detection for Sensor Data (Examensarbete)
 
-A modular Python framework for detecting anomalies in industrial sensor data using the **Isolation Forest** algorithm. This project was developed as part of a thesis to evaluate unsupervised learning performance on time-series data through synthetic anomaly injection.
+A modular Python framework for detecting anomalies in industrial sensor data using the **Isolation Forest** algorithm. This project evaluates the impact of **window size** and **step size** on unsupervised anomaly detection performance.
 
 ## Project Overview
 
-The system processes raw sensor data, transforms it into statistical feature windows, and trains an Isolation Forest model to distinguish between normal operation and anomalous behavior. To evaluate the model's effectiveness, the system automatically injects "synthetic bugs" (anomalies) into a test set and measures how many the model can successfully identify.
+The system processes raw sensor data, transforms it into statistical feature windows, and trains an Isolation Forest model. Anomalies are injected at the **raw data level** before windowing to ensure realistic feature-level effects.
+
+## Study Parameters (Locked)
+
+To ensure a controlled evaluation, the following parameters are locked:
+
+- **Contamination**: 0.2 (20% expected anomalies).
+- **Outlier Fraction**: 0.2 (Locked to match contamination).
+- **N Estimators**: 300.
+- **Seed**: 42.
 
 ## Project Structure
 
-- **`main.py`**: The central orchestrator. Defines the experiment configuration and runs the end-to-end pipeline.
-- **`app/data/processor.py`**: Handles raw data loading and slices the data into overlapping sliding windows.
-- **`app/features/extractor.py`**: Extracts advanced statistical features from each window (Mean, Std, Min, Max, Median, and Interquartile Range).
-- **`app/data/injector.py`**: Injects synthetic anomalies (outliers and noise) into the data for testing.
-- **`app/models/detector.py`**: Wraps the Isolation Forest model, including automatic feature scaling.
+- **`main.py`**: The central orchestrator.
+- **`app/data/processor.py`**: Handles raw data loading and windowing.
+- **`app/features/extractor.py`**: Extracts statistical features from each window.
+- **`app/data/injector.py`**: Injects synthetic outliers into the **raw sensor data**.
+- **`app/models/detector.py`**: Wraps the Isolation Forest model.
 - **`datasets/`**: Directory for raw sensor datasets.
-- **`results/`**: Output directory for evaluation reports, results CSV, and visualizations.
+- **`results/`**: Output directory. Each experiment run is saved in a unique subdirectory based on window and step size (e.g., `results/win200_step100/`).
 
-## 🛠️ Installation & Setup
-
-Ensure you have Python installed, then install the required libraries:
+## Installation & Setup
 
 ```bash
-pip install pandas numpy scikit-learn matplotlib seaborn
+pip install pandas numpy scikit-learn
 ```
 
 ## How to Run
 
-Execute the main experiment script:
+1. Configure the `window_size` and `step_size` in `main.py`.
+2. Execute the experiment:
 
 ```bash
 python main.py
@@ -34,16 +42,8 @@ python main.py
 
 ## Methodology
 
-1.  **Windowing**: The raw time-series is divided into windows (e.g., 200 samples) with a step size (e.g., 100) to capture local temporal patterns.
-2.  **Feature Engineering**: Instead of raw data, the model sees statistical descriptors per sensor, making it robust to minor noise while sensitive to structural changes.
-3.  **Training**: The Isolation Forest is trained on the raw sensor data to learn the "Normal" state.
-4.  **Synthetic Injection**: Test data is created by injecting synthetic anomalies (spikes and noise) into the raw dataset to evaluate detection performance.
-5.  **Evaluation**: The model is tested on the corrupted set, and performance is measured using metrics like Precision, Recall, and F1-score.
-
-## Interpreting Results
-
-After running the experiment, the outputs are saved in the `results/` directory:
-
-- **`classification_report.txt`**: Detailed performance metrics (Precision, Recall, F1-Score).
-- **`experiment_results.csv`**: Contains ground truth labels, model predictions, and anomaly scores for every test window.
-- **Visualizations**: Heatmaps and score plots showing where anomalies were detected.
+1.  **Raw Injection**: 20% of the raw data is corrupted with synthetic outliers (1.3x and 0.7x of the mean value).
+2.  **Windowing**: The corrupted raw data is then divided into windows.
+3.  **Feature Engineering**: Statistical descriptors are extracted from these windows.
+4.  **Training**: The Isolation Forest is trained on the raw (un-corrupted) data.
+5.  **Evaluation**: The model is tested on the corrupted dataset, and results are saved for future visualization and analysis.
