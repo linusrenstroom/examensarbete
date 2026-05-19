@@ -1,38 +1,31 @@
-import numpy as np
-import pandas as pd
-from typing import Tuple
+import numpy as np                                      # Import NumPy for numerical operations
+import pandas as pd                                     # Import Pandas for data manipulation
+from typing import Tuple                                # Import Tuple for type hinting returns
 
-class AnomalyInjector:
-    """
-    Injects anomalies as described in the reference paper:
-    1. Outliers: 1.3x and 0.7x of the mean value (locked to 20% proportion).
-    """
-    def __init__(self, outlier_fraction: float = 0.2, seed: int = 42):
-        self.outlier_fraction = outlier_fraction
-        self.seed = seed
-        self.rng = np.random.RandomState(seed)
+class AnomalyInjector:                                  # Define the class responsible for injecting anomalies
+    def __init__(self, fraction: float = 0.2, seed: int = 42): # Initialize with the share of anomalies and a random seed
+        self.fraction = fraction                        # Store the fraction of data to be corrupted
+        self.seed = seed                                # Store the seed for reproducible results
+        self.rng = np.random.RandomState(seed)          # Create a private random number generator instance
+        self.segment_len = 50                           # Define the length of each anomaly block (25 seconds @ 2Hz)
 
-    def inject(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, np.ndarray]:
-        print(f"Injecting anomalies (reproducible seed={self.seed}): {self.outlier_fraction*100}% outliers...")
-        n_samples = len(df)
-        labels = np.ones(n_samples) # 1 for normal
-        corrupted_df = df.copy()
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
-
-        # Calculate means for all columns to use as base for anomalies
-        means = df[numeric_cols].mean()
-
-        segment_len = 50
+    def inject(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, np.ndarray]: # Method to inject anomalies into a DataFrame
+        n_samples = len(df)                             # Get the total number of rows in the input data
+        labels = np.ones(n_samples)                     # Initialize an array of ones representing 'normal' (1)
+        corrupted_df = df.copy()                        # Create a deep copy of the data to avoid original mutation
+        cols = df.select_dtypes(include=[np.number]).columns # Identify all numeric columns for manipulation
         
-        # 1. Inject Outliers
-        n_outlier_segments = int((n_samples * self.outlier_fraction) / segment_len)
-        for _ in range(n_outlier_segments):
-            start = self.rng.randint(0, n_samples - segment_len)
-            end = start + segment_len
-            labels[start:end] = -1
+        means = df[cols].mean()                         # Calculate the global mean for every numeric sensor
+        n_segments = int((n_samples * self.fraction) / self.segment_len) # Calculate how many 50-point blocks to inject
+
+        for _ in range(n_segments):                     # Loop through the required number of anomaly segments
+            start = self.rng.randint(0, n_samples - self.segment_len) # Pick a random starting index for the block
+            end = start + self.segment_len              # Define the end index based on the fixed segment length
+            labels[start:end] = -1                      # Mark the samples in this range as anomalies (-1)
             
-            factor = self.rng.choice([1.3, 0.7])
-            for col in numeric_cols:
-                corrupted_df.iloc[start:end, corrupted_df.columns.get_loc(col)] = means[col] * factor
-                
-        return corrupted_df, labels
+            mult = self.rng.choice([1.3, 0.7])          # Randomly choose between a 30% increase or decrease
+            for col in cols:                            # Iterate through each sensor column
+                loc = corrupted_df.columns.get_loc(col) # Get the integer position of the current column
+                corrupted_df.iloc[start:end, loc] = means[col] * mult # Replace raw values with the fixed global outlier
+
+        return corrupted_df, labels                     # Return the modified data and the ground truth labels

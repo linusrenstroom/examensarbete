@@ -1,32 +1,23 @@
-import pandas as pd
-import numpy as np
-from typing import List
+import pandas as pd                                     # Import Pandas for CSV handling
+import numpy as np                                      # Import NumPy for array manipulations
+from numpy.lib.stride_tricks import as_strided          # Import specialized tool for zero-copy windowing
 
-class DataProcessor:
-    """Handles data loading and windowing operations."""
-    def __init__(self, file_path: str, window_size: int, step_size: int):
-        self.file_path = file_path
-        self.window_size = window_size
-        self.step_size = step_size
+class DataProcessor:                                    # Define the class for data loading and segmentation
+    def __init__(self, path: str, window: int, step: int): # Initialize with file path, window size, and step size
+        self.path = path                                # Store the input file path
+        self.window = window                            # Store the number of samples per window
+        self.step = step                                # Store the number of samples to move the window
 
-    def load_raw_data(self) -> pd.DataFrame:
-        print(f"Loading data from {self.file_path}...")
-        # Specific loading for the sensor data format
-        return pd.read_csv(self.file_path, sep=';', decimal=',', skiprows=[0, 2])
+    def load(self) -> pd.DataFrame:                     # Method to read the specific industrial CSV format
+        return pd.read_csv(self.path, sep=';', decimal=',', skiprows=[0, 2]) # Read CSV with custom separators and skip headers
 
-    def create_windows(self, df: pd.DataFrame) -> np.ndarray:
-        print(f"Creating overlapping windows (W={self.window_size}, S={self.step_size})...")
-        data = df.select_dtypes(include=[np.number]).values
-        n_samples = data.shape[0]
+    def create_windows(self, df: pd.DataFrame) -> np.ndarray: # Method to transform time-series into overlapping windows
+        data = df.select_dtypes(include=[np.number]).values # Convert numeric columns into a raw NumPy matrix
+        n_rows, n_cols = data.shape                     # Extract the dimensions (samples and sensors)
+        n_win = (n_rows - self.window) // self.step + 1 # Calculate how many windows fit into the sequence
         
-        # Calculate number of windows
-        n_windows = (n_samples - self.window_size) // self.step_size + 1
+        s0, s1 = data.strides                           # Get the memory strides (bytes to skip to next row/col)
+        new_shape = (n_win, self.window, n_cols)        # Define the 3D shape of the windowed result
+        new_strides = (s0 * self.step, s0, s1)          # Define how to jump through memory to create windows
         
-        # Use numpy stride tricks for ultra-fast windowing without copying data
-        from numpy.lib.stride_tricks import as_strided
-        
-        window_shape = (n_windows, self.window_size, data.shape[1])
-        window_strides = (data.strides[0] * self.step_size, data.strides[0], data.strides[1])
-        
-        windows = as_strided(data, shape=window_shape, strides=window_strides)
-        return windows
+        return as_strided(data, shape=new_shape, strides=new_strides) # Create the windows view without copying data
