@@ -44,15 +44,11 @@ if __name__ == "__main__":
                 experiment = AnomalyExperiment(config)
                 metrics = experiment.run(output_dir)
                 
-                # Combine parameters with results and timings for the global summary
+                # Combine parameters with results for the global summary
                 result_entry = {
                     'window_size': w,
                     'step_size': s,
-                    'anomaly_f1_score': metrics['f1_score'],
-                    'time_extraction_sec': metrics['time_feature_extraction'],
-                    'time_training_sec': metrics['time_training'],
-                    'time_inference_sec': metrics['time_inference'],
-                    'total_time_sec': metrics['total_time']
+                    'anomaly_f1_score': metrics['f1_score']
                 }
                 
                 summary_results.append(result_entry)

@@ -1,6 +1,5 @@
 import os                                               # Import OS for directory management
 import numpy as np                                      # Import NumPy for array operations
-import time                                             # Import time for execution profiling
 import pandas as pd
 from app.data.processor import DataProcessor            # Link to our data handling class
 from app.data.injector import AnomalyInjector            # Link to our anomaly generation class
@@ -15,21 +14,17 @@ class AnomalyExperiment:                                # Define the main contro
         self.injector = AnomalyInjector(fraction=0.2)   # Create injector with 20% corruption target
         self.detector = AnomalyDetector(contamination=0.2, n_estimators=300) # Create detector with matching contamination
 
-    def run(self, output_dir: str) -> dict:             # Main workflow method returns metrics and timings
+    def run(self, output_dir: str) -> dict:             # Main workflow method returns metrics
         raw = self.processor.load()                     # Load the raw sensor data from disk
         split = int(len(raw) * 0.7)                     # Calculate the 70% mark for the training split
         
         train_raw = raw.iloc[:split]                    # Take the first 70% as clean training data
         test_raw = raw.iloc[split:]                     # Take the remaining 30% for testing
         
-        # 1. Training Set Processing (Timing)
+        # 1. Training Set Processing
         print("--- Feature Extraction (Train) ---")
-        start_proc = time.time()                        # Record start time for feature extraction
         train_wins = self.processor.create_windows(train_raw) # Segment training data into windows
         x_train = FeatureExtractor.extract_from_windows(train_wins) # Extract features from training windows
-        end_proc = time.time()                          # Record end time for feature extraction
-        dur_proc = end_proc - start_proc
-        print(f"Completed in {dur_proc:.2f}s")
         
         # 2. Test Set Anomaly Injection
         corrupted_test, y_raw = self.injector.inject(test_raw) # Inject anomalies into the raw test slice
@@ -40,29 +35,17 @@ class AnomalyExperiment:                                # Define the main contro
         x_test = FeatureExtractor.extract_from_windows(test_wins) # Extract features from test windows
         y_test = self._label_windows(y_raw)             # Propagate raw labels to the window level
         
-        # 4. Train (Timing)
+        # 4. Train
         print("--- Model Training ---")
-        start_train = time.time()                       # Record start time for model training
         self.detector.train(x_train)                    # Train the Isolation Forest on clean data
-        end_train = time.time()                         # Record end time for model training
-        dur_train = end_train - start_train
-        print(f"Completed in {dur_train:.2f}s")
 
-        # 5. Evaluate (Timing)
+        # 5. Evaluate
         print("--- Evaluation ---")
-        start_eval = time.time()                        # Record start time for inference/evaluation
         report = self.detector.evaluate(x_test, y_test) # Evaluate the model and get the report
-        end_eval = time.time()                          # Record end time for inference/evaluation
-        dur_eval = end_eval - start_eval
-        print(f"Completed in {dur_eval:.2f}s")
 
-        # Create a dictionary for all metrics
+        # Create a dictionary for metrics
         metrics = {
-            'f1_score': report['Anomaly']['f1-score'],
-            'time_feature_extraction': dur_proc,
-            'time_training': dur_train,
-            'time_inference': dur_eval,
-            'total_time': dur_proc + dur_train + dur_eval
+            'f1_score': report['Anomaly']['f1-score']
         }
 
         # Save metrics locally to the specific result folder
